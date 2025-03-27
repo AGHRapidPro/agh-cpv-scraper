@@ -1,0 +1,1 @@
+To run script u need python with installed libraries: from bs4 BeautifulSoup, re (Regular Expresions), requests, urllib.request, json, pandas
