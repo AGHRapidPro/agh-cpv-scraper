@@ -6,6 +6,9 @@ import requests
 import urllib.request
 import json
 import pandas as pd
+import csv
+import os
+import datetime
 
 def month_to_number(month):
     return {
@@ -75,35 +78,60 @@ def parse_order_list(file_name, output):
 
     return product_dict
 
-def parse_xls_file(url, folder = 'C:/Users/Public/Documents'):
+def parse_xls_file(url, directory = 'C:/Users/Public/Documents'):
     headers = {"User-Agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36'}
     page = requests.get(url, headers)
     soup = BeautifulSoup(page.text, "html.parser")
 
     links = soup.find_all('a', href = True)
 
+    current_year = datetime.date.today().year
+    current_month = datetime.date.today().month
+    if(current_month < 10):
+        current_month = '0' + str(current_month)
+
+    folder = 'cpv'
+
+    try:
+        os.mkdir(directory + '/' + folder)
+        print(f"Directory '{folder}' created successfully.")
+    except FileExistsError:
+        print(f"Directory '{folder}' already exists.")
+    except PermissionError:
+        print(f"Permission denied: Unable to create '{folder}'.")
+    except Exception as exept:
+        print(f"An error occurred: {exept}")
+
+    directory = directory + '/' + folder
+
     for link in links:
         filename = link.get_text().strip()
 
         if(re.search(r'Dostawy i usługi .*plan zamówień publicznych \d{4} .*(grudzień( \d{1}\.?0?)?|listopad( \d{1}\.?0?)?|październik( \d{1}\.?0?)?|wrzesień( \d{1}\.?0?)?|sierpień( \d{1}\.?0?)?|lipiec( \d{1}\.?0?)?|czerwiec( \d{1}\.?0?)?|styczeń( \d{1}\.?0?)?|luty( \d{1}\.?0?)?|marzec( \d{1}\.?0?)?|kwiecień( \d{1}\.?0?)?|maj( \d{1}\.?0?)?)', filename, re.IGNORECASE)):
-            year = re.search(r'20\d{2}', filename).group()
-            month = re.search('grudzień|listopad|październik|wrzesień|sierpień|lipiec|czerwiec|styczeń|luty|marzec|kwiecień|maj', filename, re.IGNORECASE).group()
-            month = month_to_number(month)
-            if(month < 10):
-                month = '0' + str(month)
+            file_year = re.search(r'20\d{2}', filename).group()
+            file_month = re.search('grudzień|listopad|październik|wrzesień|sierpień|lipiec|czerwiec|styczeń|luty|marzec|kwiecień|maj', filename, re.IGNORECASE).group()
+            file_month = month_to_number(file_month)
+            if(file_month < 10):
+                file_month = '0' + str(file_month)
 
             href = 'https://www.dzp.agh.edu.pl' + link.get('href')
-            name = str(year) + '.' + str(month)
-            output_name = folder + '/' + name
-            print(output_name)
+
+
+            if(str(file_year) == str(current_year) and str(file_month) == str(current_month)):
+                name = 'latest'
+                output_name = directory + '/' + name 
+            else:
+                name = str(file_year) + '-' + str(file_month)
+                output_name = directory + '/' + name            
 
             print(f'downloading {href} as {name}.xls')
             urllib.request.urlretrieve(href, output_name + '.xls')
             print('downloaded')
 
-            print(parse_order_list(output_name + '.xls', output_name))
-
+            parse_order_list(output_name + '.xls', output_name)
 
 url = 'https://www.dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych-agh/'
-#output_folder = 'C:/Users/matip/OneDrive/Dokumenty/programs/parser2'
-parse_xls_file(url)
+
+path = input('Podaj ścieżke do miejsca w którym ma zostać utworzony folder z wynikiem.')
+
+parse_xls_file(url, path)
