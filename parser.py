@@ -10,6 +10,16 @@ import csv
 import os
 import datetime
 
+def json_to_csv(file, file_name): 
+    try:
+        with open(file, encoding='utf-8') as input_file:
+            df = pd.read_json(input_file)
+        df.to_csv(file_name + '.csv', encoding='utf-8', index=False)
+        print('csv file created')
+    except ValueError:
+        print('error while creating csv')
+
+
 def month_to_number(month):
     return {
         'styczeń': 1,
@@ -129,9 +139,11 @@ def parse_xls_file(url, directory = 'C:/Users/Public/Documents'):
             print('downloaded')
 
             parse_order_list(output_name + '.xls', output_name)
+            json_to_csv(output_name + '.json', output_name)
 
 url = 'https://www.dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych-agh/'
 
 path = input('Podaj ścieżke do miejsca w którym ma zostać utworzony folder z wynikiem.')
 
 parse_xls_file(url, path)
+
