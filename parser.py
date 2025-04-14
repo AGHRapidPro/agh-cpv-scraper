@@ -6,10 +6,17 @@ import requests
 import urllib.request
 import json
 import pandas as pd
-import csv
 import os
 import datetime
 
+def fix_broken_file(df, file_name):
+
+    reduced_df = df.iloc[:, :5]
+    row_length = reduced_df.apply(lambda row: row.count(), axis=1)
+    fixed_df = reduced_df[row_length == 5]
+    fixed_df.to_excel(file_name + '.xlsx', index=False)
+    print('fixed xls file')
+    
 def json_to_csv(file, file_name): 
     try:
         with open(file, encoding='utf-8') as input_file:
@@ -134,12 +141,24 @@ def parse_xls_file(url, directory = 'C:/Users/Public/Documents'):
                 name = str(file_year) + '-' + str(file_month)
                 output_name = directory + '/' + name            
 
+            xls_name = output_name + '.xls'
+            
             print(f'downloading {href} as {name}.xls')
-            urllib.request.urlretrieve(href, output_name + '.xls')
+            urllib.request.urlretrieve(href, xls_name)
             print('downloaded')
 
-            parse_order_list(output_name + '.xls', output_name)
+            df = pd.DataFrame(pd.read_excel(xls_name))
+            if(len(df.columns) > 5):
+                os.remove(xls_name)
+                fix_broken_file(df, output_name)
+                xls_name = xls_name + 'x'
+                
+            parse_order_list(xls_name, output_name)
             json_to_csv(output_name + '.json', output_name)
+
+            os.remove(xls_name)
+            os.remove(output_name + '.json')
+            print('xls and json file deleted')
 
 url = 'https://www.dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych-agh/'
 
