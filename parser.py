@@ -162,7 +162,7 @@ def parse_xls_file(url, directory = 'C:/Users/Public/Documents'):
 
 url = 'https://www.dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych-agh/'
 
-path = input('Podaj ścieżke do miejsca w którym ma zostać utworzony folder z wynikiem.')
+path = input('Set target path: ')
 
 parse_xls_file(url, path)
 
