@@ -8,21 +8,22 @@ import json
 import pandas as pd
 import os
 import datetime
+import argparse
 
-def fix_broken_file(df, file_name):
+def fix_broken_file(df, output_file_name):
 
     reduced_df = df.iloc[:, :5]
     row_length = reduced_df.apply(lambda row: row.count(), axis=1)
     fixed_df = reduced_df[row_length == 5]
-    fixed_df.to_excel(file_name + '.xlsx', index=False)
-    print('fixed xls file')
+    fixed_df.to_excel(output_file_name + '.xlsx', index=False)
+    print('fixed xls file', output_file_name)
     
-def json_to_csv(file, file_name): 
+def json_to_csv(json_file, file_name): 
     try:
-        with open(file, encoding='utf-8') as input_file:
-            df = pd.read_json(input_file)
+        with open(json_file, encoding='utf-8') as opened_json_file:
+            df = pd.read_json(opened_json_file)
         df.to_csv(file_name + '.csv', encoding='utf-8', index=False)
-        print('csv file created')
+        print(file_name + '.csv', 'created')
     except ValueError:
         print('error while creating csv')
 
@@ -90,12 +91,12 @@ def parse_order_list(file_name, output):
         with open(output + '.json', 'w', encoding='utf-8') as file:
             json.dump(result_dict, file, ensure_ascii=False)
         print("File written successfully!")
-    except Exception as e:
-        print(f"Error writing to file: {e}")
+    except Exception as exeption:
+        print(f"Error writing to file: {exeption}")
 
     return product_dict
 
-def parse_xls_file(url, directory = 'C:/Users/Public/Documents'):
+def parse_xls_file(url, directory):
     headers = {"User-Agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36'}
     page = requests.get(url, headers)
     soup = BeautifulSoup(page.text, "html.parser")
@@ -110,16 +111,15 @@ def parse_xls_file(url, directory = 'C:/Users/Public/Documents'):
     folder = 'cpv'
 
     try:
-        os.mkdir(directory + '/' + folder)
-        print(f"Directory '{folder}' created successfully.")
+        os.mkdir(directory)
+        print(f"Directory '{directory}' created successfully.")
     except FileExistsError:
-        print(f"Directory '{folder}' already exists.")
+        print(f"Directory '{directory}' already exists.")
     except PermissionError:
-        print(f"Permission denied: Unable to create '{folder}'.")
-    except Exception as exept:
-        print(f"An error occurred: {exept}")
+        print(f"Permission denied: Unable to create '{directory}'.")
+    except Exception as exeption:
+        print(f"An error occurred: {exeption}")
 
-    directory = directory + '/' + folder
 
     for link in links:
         filename = link.get_text().strip()
@@ -131,7 +131,7 @@ def parse_xls_file(url, directory = 'C:/Users/Public/Documents'):
             if(file_month < 10):
                 file_month = '0' + str(file_month)
 
-            href = 'https://www.dzp.agh.edu.pl' + link.get('href')
+            href = 'https://www.dzp.agh.edu.pl' + link.get('href')      #Link to specific file
 
 
             if(str(file_year) == str(current_year) and str(file_month) == str(current_month)):
@@ -160,9 +160,9 @@ def parse_xls_file(url, directory = 'C:/Users/Public/Documents'):
             os.remove(output_name + '.json')
             print('xls and json file deleted')
 
-url = 'https://www.dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych-agh/'
 
-path = input('Set target path: ')
-
-parse_xls_file(url, path)
-
+parser = argparse.ArgumentParser(description="Download and parse XLS order files.")
+parser.add_argument('-u', '--url', default='https://www.dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych-agh/')
+parser.add_argument('-o', '--output', default='./cpv')
+args = parser.parse_args()
+parse_xls_file(args.url, args.output)
