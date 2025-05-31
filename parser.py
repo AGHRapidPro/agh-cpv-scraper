@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 from bs4 import BeautifulSoup
 import re
@@ -9,6 +9,7 @@ import pandas as pd
 import os
 import datetime
 import argparse
+from urllib.parse import urlsplit
 
 def fix_broken_file(df, output_file_name):
 
@@ -17,16 +18,6 @@ def fix_broken_file(df, output_file_name):
     fixed_df = reduced_df[row_length == 5]
     fixed_df.to_excel(output_file_name + '.xlsx', index=False)
     print('fixed xls file', output_file_name)
-    
-def json_to_csv(json_file, file_name): 
-    try:
-        with open(json_file, encoding='utf-8') as opened_json_file:
-            df = pd.read_json(opened_json_file)
-        df.to_csv(file_name + '.csv', encoding='utf-8', index=False)
-        print(file_name + '.csv', 'created')
-    except ValueError:
-        print('error while creating csv')
-
 
 def month_to_number(month):
     return {
@@ -102,6 +93,7 @@ def parse_xls_file(url, directory):
     soup = BeautifulSoup(page.text, "html.parser")
 
     links = soup.find_all('a', href = True)
+    print(links)
 
     current_year = datetime.date.today().year
     current_month = datetime.date.today().month
@@ -120,7 +112,6 @@ def parse_xls_file(url, directory):
     except Exception as exeption:
         print(f"An error occurred: {exeption}")
 
-
     for link in links:
         filename = link.get_text().strip()
 
@@ -131,18 +122,22 @@ def parse_xls_file(url, directory):
             if(file_month < 10):
                 file_month = '0' + str(file_month)
 
-            href = 'https://www.dzp.agh.edu.pl' + link.get('href')      #Link to specific file
+            url_parts = urlsplit(url)
+            base_url = url_parts.scheme + "://" + url_parts.netloc
+            href = base_url + link.get('href')      #Link to specific file
+            print(href)
+            exit(0)
 
 
             if(str(file_year) == str(current_year) and str(file_month) == str(current_month)):
                 name = 'latest'
-                output_name = directory + '/' + name 
-            else:
-                name = str(file_year) + '-' + str(file_month)
-                output_name = directory + '/' + name            
+                output_name = directory + '/' + name
+
+            name = str(file_year) + '-' + str(file_month)
+            output_name = directory + '/' + name
 
             xls_name = output_name + '.xls'
-            
+
             print(f'downloading {href} as {name}.xls')
             urllib.request.urlretrieve(href, xls_name)
             print('downloaded')
@@ -152,16 +147,16 @@ def parse_xls_file(url, directory):
                 os.remove(xls_name)
                 fix_broken_file(df, output_name)
                 xls_name = xls_name + 'x'
-                
+
             parse_order_list(xls_name, output_name)
-            json_to_csv(output_name + '.json', output_name)
+            #json_to_csv(output_name + '.json', output_name)
 
-            os.remove(xls_name)
-            os.remove(output_name + '.json')
-            print('xls and json file deleted')
+            #os.remove(xls_name)
+            #os.remove(output_name + '.json')
+            #print('xls and json file deleted')
 
 
-parser = argparse.ArgumentParser(description="Download and parse XLS order files.")
+parser = argparse.ArgumentParser(description="This script downloads and parses XLS files provided by Public Procurement Division")
 parser.add_argument('-u', '--url', default='https://www.dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych-agh/')
 parser.add_argument('-o', '--output', default='./cpv')
 args = parser.parse_args()
