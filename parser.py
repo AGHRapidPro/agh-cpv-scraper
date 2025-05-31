@@ -125,9 +125,6 @@ def parse_xls_file(url, directory):
             url_parts = urlsplit(url)
             base_url = url_parts.scheme + "://" + url_parts.netloc
             href = base_url + link.get('href')      #Link to specific file
-            print(href)
-            exit(0)
-
 
             if(str(file_year) == str(current_year) and str(file_month) == str(current_month)):
                 name = 'latest'
