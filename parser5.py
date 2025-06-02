@@ -76,7 +76,8 @@ class ProcurementTracker:
             # Process data
             df.columns = ["lp", "code", "name", "price_pln", "price_eur"]
             products = df[df['name'].notnull()].copy()
-            products['price_pln'] = products['price_pln'].fillna(0).apply(
+            products['price_pln'] = pd.to_numeric(products['price_pln'], errors='coerce').fillna(0)
+            products['price_pln'] = products['price_pln'].apply(
                 lambda x: str(round(float(x), 2)) if str(x).replace('.','').isdigit() else '0')
             products['price_eur'] = products['price_eur'].fillna(0).apply(
                 lambda x: str(round(float(x), 2)) if str(x).replace('.','').isdigit() else '0')
