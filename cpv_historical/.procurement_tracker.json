@@ -1,0 +1,116 @@
+{
+  "tracked_files": {
+    "2025-05": {
+      "href": "/fileadmin/default/templates/css/j/dzp/system/Plan_zamowien/Plan_2025/maj_2025_plan_zamowien_dostawy_i_uslugi.xls",
+      "version": 1,
+      "last_processed": "2025-06-02T17:09:05.491121",
+      "json_path": "./cpv/2025-05.json",
+      "available": false
+    },
+    "2025-04": {
+      "href": "/fileadmin/default/templates/css/j/dzp/system/Plan_zamowien/Plan_2025/kwiecien_2025_plan_zamowien_dostawy_i_uslugi.xls",
+      "version": 1,
+      "last_processed": "2025-06-02T17:09:05.576237",
+      "json_path": "./cpv/2025-04.json",
+      "available": false
+    },
+    "2025-03": {
+      "href": "/fileadmin/default/templates/css/j/dzp/system/Plan_zamowien/Plan_2025/marzec_2025__ver_3_plan_zamowien_dostawy_i_uslugi.xls",
+      "version": 3,
+      "last_processed": "2025-06-02T17:09:05.668806",
+      "json_path": "./cpv/2025-03.json",
+      "available": false
+    },
+    "2025-02": {
+      "href": "/fileadmin/default/templates/css/j/dzp/system/Plan_zamowien/Plan_2025/luty_2025_ver_3_plan_zamowien_dostawy_i_uslugi.xls",
+      "version": 3,
+      "last_processed": "2025-06-02T17:09:05.755800",
+      "json_path": "./cpv/2025-02.json",
+      "available": false
+    },
+    "2025-01": {
+      "href": "/fileadmin/default/templates/css/j/dzp/system/Plan_zamowien/Plan_2025/2025_Plan_zamowien_publicznych_-_dostawy_i_uslug__ver._2.0_z_31_01_2025_.xls",
+      "version": 1,
+      "last_processed": "2025-06-02T17:09:06.023090",
+      "json_path": "./cpv/2025-01.json",
+      "available": false
+    },
+    "2024-12": {
+      "href": "/fileadmin/default/templates/css/j/dzp/system/Plan_zamowien/Plan_2024/Dostawy_i_uslugi_grudzien_2024_-_plan_zamowien_publicznych.xls",
+      "version": 1,
+      "last_processed": "2025-06-02T17:09:06.124147",
+      "json_path": "./cpv/2024-12.json",
+      "available": false
+    },
+    "2024-11": {
+      "href": "/fileadmin/default/templates/css/j/dzp/system/Plan_zamowien/Plan_2024/Dostawy_listopad_2024_-_plan_zamowien_publicznych_01.xls",
+      "version": 1,
+      "last_processed": "2025-06-02T17:09:06.253505",
+      "json_path": "./cpv/2024-11.json",
+      "available": false
+    },
+    "2024-10": {
+      "href": "/fileadmin/default/templates/css/j/dzp/system/Plan_zamowien/Plan_2024/Dostawy_pazdziernik_2024_-_plan_zamowien_publicznych.xls",
+      "version": 1,
+      "last_processed": "2025-06-02T17:09:06.350853",
+      "json_path": "./cpv/2024-10.json",
+      "available": false
+    },
+    "2024-09": {
+      "href": "/fileadmin/default/templates/css/j/dzp/system/Plan_zamowien/Plan_2024/Dostawy_i_uslugi_wrzesien_2.0._2024_-_plan_zamowien_publicznych.xls",
+      "version": 1,
+      "last_processed": "2025-06-02T17:09:06.440454",
+      "json_path": "./cpv/2024-09.json",
+      "available": false
+    },
+    "2024-08": {
+      "href": "/fileadmin/default/templates/css/j/dzp/system/Plan_zamowien/Plan_2024/Dostawy_i_uslugi_sierpien_2024_-_plan_zamowien_publicznych.xls",
+      "version": 1,
+      "last_processed": "2025-06-02T17:09:06.524127",
+      "json_path": "./cpv/2024-08.json",
+      "available": false
+    },
+    "2024-07": {
+      "href": "/fileadmin/default/templates/css/j/dzp/system/Plan_zamowien/Plan_2024/Dostawy_i_uslugi_lipiec_2024_-_plan_zamowien_publicznych.xls",
+      "version": 1,
+      "last_processed": "2025-06-02T17:09:06.864301",
+      "json_path": "./cpv/2024-07.json",
+      "available": false
+    },
+    "2024-06": {
+      "href": "/fileadmin/default/templates/css/j/dzp/system/Plan_zamowien/Plan_2024/Dostawy_i_uslugi_czerwiec_2024_-_plan_zamowien_publicznych.xls",
+      "version": 1,
+      "last_processed": "2025-06-02T17:09:06.960084",
+      "json_path": "./cpv/2024-06.json",
+      "available": false
+    },
+    "2024-05": {
+      "href": "/fileadmin/default/templates/css/j/dzp/system/Plan_zamowien/Plan_2024/Dostawy_i_uslugi_maj_2024_-_plan_zamowien_publicznych.xls",
+      "version": 1,
+      "last_processed": "2025-06-02T17:09:07.058041",
+      "json_path": "./cpv/2024-05.json",
+      "available": false
+    },
+    "2024-04": {
+      "href": "/fileadmin/default/templates/css/j/dzp/system/Plan_zamowien/Plan_2024/Plan_zamowien_publicznych_-_dostawy_i_uslugi_kwiecien_2024_-_Jednostki.xlsx",
+      "version": 1,
+      "last_processed": "2025-06-02T17:09:07.141527",
+      "json_path": "./cpv/2024-04.json",
+      "available": false
+    },
+    "2024-03": {
+      "href": "/fileadmin/default/templates/css/j/dzp/system/Plan_zamowien/Plan_2024/Dostawy_i_uslugi_marzec_2024_-_plan_zamowien_publicznych.xls",
+      "version": 1,
+      "last_processed": "2025-06-02T17:09:07.228937",
+      "json_path": "./cpv/2024-03.json",
+      "available": false
+    },
+    "2024-02": {
+      "href": "/fileadmin/default/templates/css/j/dzp/system/Plan_zamowien/Plan_2024/Dostawy_i_uslugi_luty_2024_-_plan_zamowien_publicznych.xls",
+      "version": 1,
+      "last_processed": "2025-06-02T17:09:07.308287",
+      "json_path": "./cpv/2024-02.json",
+      "available": false
+    }
+  }
+}

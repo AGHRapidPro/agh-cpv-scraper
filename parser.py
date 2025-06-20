@@ -1,160 +1,244 @@
 #!/usr/bin/env python3
 
-from bs4 import BeautifulSoup
-import re
-import requests
-import urllib.request
-import json
-import pandas as pd
 import os
-import datetime
+import re
+import json
 import argparse
+import datetime
 from urllib.parse import urlsplit
-
-def fix_broken_file(df, output_file_name):
-
-    reduced_df = df.iloc[:, :5]
-    row_length = reduced_df.apply(lambda row: row.count(), axis=1)
-    fixed_df = reduced_df[row_length == 5]
-    fixed_df.to_excel(output_file_name + '.xlsx', index=False)
-    print('fixed xls file', output_file_name)
-
-def month_to_number(month):
-    return {
-        'styczeń': 1,
-        'luty': 2,
-        'marzec': 3,
-        'kwiecień': 4,
-        'maj': 5,
-        'czerwiec': 6,
-        'lipiec': 7,
-        'sierpień': 8,
-        'wrzesień': 9,
-        'październik': 10,
-        'listopad': 11,
-        'grudzień': 12
-    }[month]
-
-def safe_round(x):
-    try:
-        return str(round(float(x), 2))
-    except ValueError:
-        return '0'
-
-def parse_order_list(file_name, output):
-    df = pd.DataFrame(pd.read_excel(file_name))
-
-    df.columns.values[0] = "lp"
-    df.columns.values[1] = "code"
-    df.columns.values[2] = "name"
-    df.columns.values[3] = "price_pln"
-    df.columns.values[4] = "price_eur"
-
-    df_filtered = df[df['name'].notnull()]
-
-    df_filtered = df_filtered.copy()
-    df_filtered['price_pln'] = df_filtered['price_pln'].fillna(0).apply(lambda x: safe_round(x))
-
-    df_filtered = df_filtered.copy()
-    df_filtered['price_eur'] = df_filtered['price_eur'].fillna(0).apply(lambda x: safe_round(x))
-
-    df_filtered = df_filtered.copy()
-    df_filtered['code'] = df_filtered['code'].fillna('')
-
-    product_dict = df_filtered.to_dict('records')
-
-    result_dict = []
-
-    temp_arr = []
-    for item in product_dict:
-        if item['price_pln'] == '0.0' and item['price_eur'] == '0.0' and len(temp_arr) > 0:
-            result_dict.append({
-                "category": temp_arr[0]['name'],
-                "list": temp_arr
-            })
-            temp_arr = []
-            temp_arr.append(item)
-        else:
-            temp_arr.append(item)
+import pandas as pd
+import requests
+from bs4 import BeautifulSoup
+import urllib.request
 
 
-    try:
-        with open(output + '.json', 'w', encoding='utf-8') as file:
-            json.dump(result_dict, file, ensure_ascii=False)
-        print("File written successfully!")
-    except Exception as exeption:
-        print(f"Error writing to file: {exeption}")
+class ProcurementTracker:
+    """Tracks and processes procurement files with version detection."""
+    
+    MONTHS_TO_NUMBERS = {
+        'styczeń': 1, 'luty': 2, 'marzec': 3, 'kwiecień': 4,
+        'maj': 5, 'czerwiec': 6, 'lipiec': 7, 'sierpień': 8,
+        'wrzesień': 9, 'październik': 10, 'listopad': 11, 'grudzień': 12
+    }
+    
+    USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36'
+    
+    def __init__(self, output_directory):
+        self.output_directory = output_directory
+        self.state_file = os.path.join(output_directory, '.procurement_tracker.json')
+        self._ensure_output_directory_exists()
+        self.state = self._load_state()
+    
+    def _ensure_output_directory_exists(self):
+        """Create output directory if needed."""
+        os.makedirs(self.output_directory, exist_ok=True)
 
-    return product_dict
+    def _load_state(self):
+        """Load tracking state from file."""
+        if os.path.exists(self.state_file):
+            with open(self.state_file, 'r') as f:
+                return json.load(f)
+        return {'tracked_files': {}}
 
-def parse_xls_file(url, directory):
-    headers = {"User-Agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36'}
-    page = requests.get(url, headers)
-    soup = BeautifulSoup(page.text, "html.parser")
+    def _save_state(self):
+        """Persist current tracking state."""
+        with open(self.state_file, 'w') as f:
+            json.dump(self.state, f, indent=2)
 
-    links = soup.find_all('a', href = True)
-    print(links)
+    def _convert_month_name_to_number(self, month_name):
+        """Convert Polish month name to number."""
+        return self.MONTHS_TO_NUMBERS.get(month_name.lower(), 1)
 
-    current_year = datetime.date.today().year
-    current_month = datetime.date.today().month
-    if(current_month < 10):
-        current_month = '0' + str(current_month)
+    def _generate_file_id(self, year, month):
+        """Create standardized file identifier."""
+        return f"{year}-{month:02d}"
 
-    folder = 'cpv'
+    def _extract_version(self, text):
+        """Extract version number from text (e.g., 'ver 3' -> 3)."""
+        version_match = re.search(r'(?:ver|wersja|version)[\s\.]*(\d+)', text, re.IGNORECASE)
+        if version_match:
+            return int(version_match.group(1))
+        return 1  # Default version if not specified
 
-    try:
-        os.mkdir(directory)
-        print(f"Directory '{directory}' created successfully.")
-    except FileExistsError:
-        print(f"Directory '{directory}' already exists.")
-    except PermissionError:
-        print(f"Permission denied: Unable to create '{directory}'.")
-    except Exception as exeption:
-        print(f"An error occurred: {exeption}")
+    def _process_excel_file(self, excel_path, output_base_name):
+        """Convert Excel file to JSON and clean up."""
+        try:
+            # Read and fix Excel if needed
+            df = pd.read_excel(excel_path)
+            if len(df.columns) > 5:
+                fixed_path = f"{output_base_name}.xlsx"
+                df = df.iloc[:, :5]
+                df = df[df.apply(lambda row: row.count(), axis=1) == 5]
+                df.to_excel(fixed_path, index=False)
+                os.remove(excel_path)
+                excel_path = fixed_path
 
-    for link in links:
-        filename = link.get_text().strip()
+            # Process data
+            df.columns = ["lp", "code", "name", "price_pln", "price_eur"]
+            products = df[df['name'].notnull()].copy()
+            products['price_pln'] = pd.to_numeric(products['price_pln'], errors='coerce').fillna(0)
+            products['price_pln'] = products['price_pln'].apply(
+                lambda x: str(round(float(x), 2)) if str(x).replace('.','').isdigit() else '0')
+            products['price_eur'] = products['price_eur'].fillna(0).apply(
+                lambda x: str(round(float(x), 2)) if str(x).replace('.','').isdigit() else '0')
+            products['code'] = products['code'].fillna('')
 
-        if(re.search(r'Dostawy i usługi .*plan zamówień publicznych \d{4} .*(grudzień( \d{1}\.?0?)?|listopad( \d{1}\.?0?)?|październik( \d{1}\.?0?)?|wrzesień( \d{1}\.?0?)?|sierpień( \d{1}\.?0?)?|lipiec( \d{1}\.?0?)?|czerwiec( \d{1}\.?0?)?|styczeń( \d{1}\.?0?)?|luty( \d{1}\.?0?)?|marzec( \d{1}\.?0?)?|kwiecień( \d{1}\.?0?)?|maj( \d{1}\.?0?)?)', filename, re.IGNORECASE)):
-            file_year = re.search(r'20\d{2}', filename).group()
-            file_month = re.search('grudzień|listopad|październik|wrzesień|sierpień|lipiec|czerwiec|styczeń|luty|marzec|kwiecień|maj', filename, re.IGNORECASE).group()
-            file_month = month_to_number(file_month)
-            if(file_month < 10):
-                file_month = '0' + str(file_month)
+            # Categorize products
+            categories = []
+            current_category = []
+            for _, row in products.iterrows():
+                if (row['price_pln'] == '0.0' and 
+                    row['price_eur'] == '0.0' and 
+                    len(current_category) > 0):
+                    categories.append({
+                        "category": current_category[0]['name'],
+                        "list": current_category
+                    })
+                    current_category = [row.to_dict()]
+                else:
+                    current_category.append(row.to_dict())
 
-            url_parts = urlsplit(url)
-            base_url = url_parts.scheme + "://" + url_parts.netloc
-            href = base_url + link.get('href')      #Link to specific file
+            # Save JSON
+            json_path = f"{output_base_name}.json"
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(categories, f, ensure_ascii=False)
 
-            if(str(file_year) == str(current_year) and str(file_month) == str(current_month)):
-                name = 'latest'
-                output_name = directory + '/' + name
+            # Clean up
+            if os.path.exists(excel_path):
+                os.remove(excel_path)
 
-            name = str(file_year) + '-' + str(file_month)
-            output_name = directory + '/' + name
+            return True
+        except Exception as e:
+            print(f"Error processing {excel_path}: {e}")
+            return False
 
-            xls_name = output_name + '.xls'
+    def _download_if_newer_version(self, file_url, file_id, href, version):
+        """Download and process file if it's a newer version."""
+        current_state = self.state['tracked_files'].get(file_id, {})
+        current_version = current_state.get('version', 0)
+        
+        # Skip if version is not newer
+        if version <= current_version:
+            print(f"Skipping older version ({version}) of file: {file_url}")
+            return False
+        
+        # Determine output paths
+        is_current = file_id == self._generate_file_id(
+            datetime.date.today().year,
+            datetime.date.today().month
+        )
+        output_name = os.path.join(
+            self.output_directory,
+            'latest' if is_current else file_id
+        )
+        xls_path = f"{output_name}.xls"
 
-            print(f'downloading {href} as {name}.xls')
-            urllib.request.urlretrieve(href, xls_name)
-            print('downloaded')
+        # Download and process
+        print(f"Processing new version ({version}) of file: {file_url}")
+        urllib.request.urlretrieve(file_url, xls_path)
+        
+        if self._process_excel_file(xls_path, output_name):
+            # Update state
+            self.state['tracked_files'][file_id] = {
+                'href': href,
+                'version': version,
+                'last_processed': datetime.datetime.now().isoformat(),
+                'json_path': f"{output_name}.json"
+            }
+            return True
+        return False
 
-            df = pd.DataFrame(pd.read_excel(xls_name))
-            if(len(df.columns) > 5):
-                os.remove(xls_name)
-                fix_broken_file(df, output_name)
-                xls_name = xls_name + 'x'
+    def process_url(self, url):
+        """Main processing method with version detection."""
+        try:
+            response = requests.get(url, headers={'User-Agent': self.USER_AGENT})
+            soup = BeautifulSoup(response.text, "html.parser")
+            
+            # First pass: collect all potential files with versions
+            file_candidates = {}
+            for link in soup.find_all('a', href=True):
+                link_text = link.get_text().strip()
+                
+                # Check if link matches procurement file pattern
+                if not re.search(
+                    r'Dostawy i usługi .*',
+                    link_text, re.IGNORECASE
+                ):
+                    continue
 
-            parse_order_list(xls_name, output_name)
-            #json_to_csv(output_name + '.json', output_name)
+                # Extract year and month
+                year_match = '2025'
+                month_match = re.search(
+                    'grudzień|listopad|październik|wrzesień|sierpień|lipiec|czerwiec|styczeń|luty|marzec|kwiecień|maj',
+                    link_text, re.IGNORECASE
+                )
+                if not year_match or not month_match:
+                    continue
 
-            #os.remove(xls_name)
-            #os.remove(output_name + '.json')
-            #print('xls and json file deleted')
+                file_year = '2025'
+                file_month = self._convert_month_name_to_number(month_match.group())
+                file_id = self._generate_file_id(file_year, file_month)
+                href = link['href']
+                version = self._extract_version(link_text)
+
+                # Keep only the newest version for each month
+                if file_id not in file_candidates or version > file_candidates[file_id]['version']:
+                    url_parts = urlsplit(url)
+                    file_url = f"{url_parts.scheme}://{url_parts.netloc}{href}"
+                    file_candidates[file_id] = {
+                        'url': file_url,
+                        'href': href,
+                        'version': version
+                    }
+
+            # Second pass: process the selected candidates
+            for file_id, candidate in file_candidates.items():
+                self._download_if_newer_version(
+                    candidate['url'],
+                    file_id,
+                    candidate['href'],
+                    candidate['version']
+                )
+
+            # Clean up state for files no longer present
+            current_file_id = self._generate_file_id(
+                datetime.date.today().year,
+                datetime.date.today().month
+            )
+            active_files = set(file_candidates.keys())
+            for file_id in list(self.state['tracked_files'].keys()):
+                if file_id not in active_files and file_id != current_file_id:
+                    print(f"File no longer available: {file_id}")
+                    # Keep in state but mark as unavailable
+                    self.state['tracked_files'][file_id]['available'] = False
+
+            self._save_state()
+            return True
+
+        except Exception as e:
+            print(f"Error processing {url}: {e}")
+            return False
 
 
-parser = argparse.ArgumentParser(description="This script downloads and parses XLS files provided by Public Procurement Division")
-parser.add_argument('-u', '--url', default='https://www.dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych-agh/')
-parser.add_argument('-o', '--output', default='./cpv')
-args = parser.parse_args()
-parse_xls_file(args.url, args.output)
+def main():
+    parser = argparse.ArgumentParser(
+        description="Track and process procurement files with version detection"
+    )
+    parser.add_argument(
+        '-u', '--url',
+        default='https://www.dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych-agh/',
+        help='Source URL to monitor'
+    )
+    parser.add_argument(
+        '-o', '--output',
+        default='./cpv',
+        help='Output directory for processed files'
+    )
+    
+    args = parser.parse_args()
+    tracker = ProcurementTracker(args.output)
+    tracker.process_url(args.url)
+
+
+if __name__ == "__main__":
+    main()
