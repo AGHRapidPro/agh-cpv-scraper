@@ -52,18 +52,29 @@ cpv/
 ```json
 [
   {
-    "category": "Computer Equipment",
-    "list": [
-      {"lp": 1, "code": "PC-001", "name": "Laptop", "price_pln": "4500.00", "price_eur": "1000.00"},
-      {"lp": 2, "code": "PC-002", "name": "Monitor", "price_pln": "1200.00", "price_eur": "270.00"}
-    ]
+    "name": "Materiały wzorcowe produktow roślinnych",
+    "category": "Produkty rolnictwa, hodowli, rybołówstwa, leśnictwa i podobne",
+    "lp": 2.0,
+    "code": "03000000-1",
+    "price_pln": "500.00",
+    "price_eur": "107.83"
   },
   {
-    "category": "Office Supplies",
-    "list": [
-      {"lp": 3, "code": "OS-001", "name": "Printer", "price_pln": "800.00", "price_eur": "180.00"}
-    ]
-  }
+    "name": "Drewno",
+    "category": "Leśnictwo i pozyskiwanie drewna",
+    "lp": 5.0,
+    "code": "03410000-7",
+    "price_pln": "81697.57",
+    "price_eur": "17618.25"
+  },
+  {
+    "name": "Paliwa stałe (węgiel i paliwa na bazie węgla, węgiel i torf, koks), ropa naftowa, produkty naftowe",
+    "category": "Produkty naftowe, paliwo, energia elektryczna i inne źródła energii",
+    "lp": 9.0,
+    "code": "09110000-3",
+    "price_pln": "8000.00",
+    "price_eur": "1725.22"
+  },
 ]
 ```
 

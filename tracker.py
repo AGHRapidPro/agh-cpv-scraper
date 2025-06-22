@@ -14,6 +14,7 @@ MONTHS_POLISH = {
 }
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36'
 
+
 class ProcurementTracker:
     def __init__(self, output_directory):
         self.output_directory = output_directory
@@ -22,12 +23,12 @@ class ProcurementTracker:
         os.makedirs(output_directory, exist_ok=True)
         self.state = self.load_state()
         self.verify_existing_files()
+        self.update_latest_symlink()
 
     def load_state(self):
         if os.path.exists(self.state_file):
             with open(self.state_file, 'r') as f:
                 state = json.load(f)
-                # Backward compatibility: add json_path if missing
                 for file_id, data in state['downloaded'].items():
                     if 'json_path' not in data:
                         data['json_path'] = os.path.join(
@@ -90,6 +91,8 @@ class ProcurementTracker:
         elif not self.any_upgrade:
             print("All files are up-to-date.")
 
+        self.update_latest_symlink()
+
     def download_file(self, url, file_id, version):
         xls_path = os.path.join(self.output_directory, f"{file_id}.xls")
         json_path = os.path.join(self.output_directory, f"{file_id}.json")
@@ -117,9 +120,25 @@ class ProcurementTracker:
             print(f"Processed: {file_id}.json (v{version}) from: {url}")
 
         except Exception as e:
-            # Cleanup on error
             if os.path.exists(xls_path):
                 os.remove(xls_path)
-            if os.path.exists(json_path):
-                os.remove(json_path)
             print(f"Error processing {url}: {str(e)}")
+
+    def update_latest_symlink(self):
+        """Update latest.json symlink to point to the most recent file"""
+        if not self.state['downloaded']:
+            return
+
+        # Find the most recent file by file_id (YYYY-MM format sorts chronologically)
+        latest_id = max(self.state['downloaded'].keys())
+        latest_path = self.state['downloaded'][latest_id]['json_path']
+        symlink_path = os.path.join(self.output_directory, 'latest.json')
+
+        # Update symlink
+        try:
+            if os.path.exists(symlink_path) or os.path.islink(symlink_path):
+                os.remove(symlink_path)
+            os.symlink(os.path.basename(latest_path), symlink_path)
+            print(f"Updated latest.json to point to {latest_id}.json")
+        except Exception as e:
+            print(f"Error updating latest.json symlink: {str(e)}")
