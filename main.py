@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
-
-from tracker import ProcurementTracker
 import argparse
+from tracker import ProcurementTracker
 
 def main():
     parser = argparse.ArgumentParser(description="Track and download procurement files")
-    parser.add_argument('-u', '--url', default='https://dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych', help='Source URL to scrape')
-    parser.add_argument('-o', '--output', default='./cpv', help='Output directory for downloaded files')
+    parser.add_argument(
+        '-u', '--url',
+        default='https://dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych',
+        help='Source URL to scrape'
+    )
+    parser.add_argument(
+        '-o', '--output',
+        default='./cpv',
+        help='Output directory for downloaded files'
+    )
     args = parser.parse_args()
     
     tracker = ProcurementTracker(args.output)

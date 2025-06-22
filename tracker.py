@@ -5,6 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from datetime import datetime
+from parser import XLSConverter
 
 MONTHS_POLISH = {
     'styczeń': 1, 'luty': 2, 'marzec': 3, 'kwiecień': 4,
@@ -21,11 +22,19 @@ class ProcurementTracker:
         os.makedirs(output_directory, exist_ok=True)
         self.state = self.load_state()
         self.verify_existing_files()
-    
+
     def load_state(self):
         if os.path.exists(self.state_file):
             with open(self.state_file, 'r') as f:
-                return json.load(f)
+                state = json.load(f)
+                # Backward compatibility: add json_path if missing
+                for file_id, data in state['downloaded'].items():
+                    if 'json_path' not in data:
+                        data['json_path'] = os.path.join(
+                            self.output_directory,
+                            f"{file_id}.json"
+                        )
+                return state
         return {'downloaded': {}}
 
     def save_state(self):
@@ -34,9 +43,9 @@ class ProcurementTracker:
 
     def verify_existing_files(self):
         for file_id, data in list(self.state['downloaded'].items()):
-            file_path = os.path.join(self.output_directory, f"{file_id}.xls")
-            if not os.path.exists(file_path):
-                print(f"Missing file detected: {file_id}.xls. Redownloading...")
+            json_path = data['json_path']
+            if not os.path.exists(json_path):
+                print(f"Missing JSON file: {json_path}. Redownloading...")
                 self.download_file(data['url'], file_id, data['version'])
 
     def extract_version(self, text):
@@ -47,52 +56,70 @@ class ProcurementTracker:
         headers = {'User-Agent': USER_AGENT}
         response = requests.get(base_url, headers=headers)
         response.raise_for_status()
-        
+
         soup = BeautifulSoup(response.text, 'html.parser')
         found_links = False
-        
+
         for link in soup.find_all('a', href=True):
             href = link.get('href', '').lower()
             if not href.endswith('.xls'):
                 continue
-            
+
             full_url = urljoin(base_url, link['href'])
             text = (link.text + full_url).lower()
-            
+
             for polish_month, month_num in MONTHS_POLISH.items():
                 if polish_month in text:
                     year_match = re.search(r'20\d{2}', full_url)
                     if not year_match:
                         continue
-                    
+
                     year = int(year_match.group(0))
                     file_id = f"{year}-{month_num:02d}"
                     version = self.extract_version(text)
                     found_links = True
-                    
+
                     current = self.state['downloaded'].get(file_id, {'version': 0})
                     if version > current.get('version', 0):
                         self.any_upgrade = True
                         self.download_file(full_url, file_id, version)
                     break
-        
+
         if not found_links:
             print("No valid links found on the page.")
         elif not self.any_upgrade:
             print("All files are up-to-date.")
 
     def download_file(self, url, file_id, version):
-        output_path = os.path.join(self.output_directory, f"{file_id}.xls")
-        headers = {'User-Agent': USER_AGENT}
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        
-        with open(output_path, 'wb') as f:
-            f.write(response.content)
-        
-        self.state.setdefault('downloaded', {})[file_id] = {
-            'url': url,
-            'version': version,
-            'downloaded_at': datetime.now().isoformat()
-        }
-        print(f"Downloaded: {file_id}.xls (v{version})")
+        xls_path = os.path.join(self.output_directory, f"{file_id}.xls")
+        json_path = os.path.join(self.output_directory, f"{file_id}.json")
+
+        try:
+            # Download XLS file
+            response = requests.get(url, headers={'User-Agent': USER_AGENT})
+            response.raise_for_status()
+
+            with open(xls_path, 'wb') as f:
+                f.write(response.content)
+
+            # Convert to JSON and remove XLS
+            converter = XLSConverter(xls_path)
+            converter.convert(json_path)
+            os.remove(xls_path)
+
+            # Update state
+            self.state.setdefault('downloaded', {})[file_id] = {
+                'url': url,
+                'version': version,
+                'downloaded_at': datetime.now().isoformat(),
+                'json_path': json_path
+            }
+            print(f"Processed: {file_id} (v{version})")
+
+        except Exception as e:
+            # Cleanup on error
+            if os.path.exists(xls_path):
+                os.remove(xls_path)
+            if os.path.exists(json_path):
+                os.remove(json_path)
+            print(f"Error processing {url}: {str(e)}")
