@@ -77,10 +77,10 @@ class XLSConverter:
                 eur_str = self._format_price(eur_val)
 
                 items.append({
+                    "name": name_val,
                     "category": current_category,
                     "lp": lp_float,
                     "code": code,
-                    "name": name_val,
                     "price_pln": pln_str,
                     "price_eur": eur_str
                 })

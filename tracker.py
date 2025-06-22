@@ -114,7 +114,7 @@ class ProcurementTracker:
                 'downloaded_at': datetime.now().isoformat(),
                 'json_path': json_path
             }
-            print(f"Processed: {file_id} (v{version})")
+            print(f"Processed: {file_id}.json (v{version}) from: {url}")
 
         except Exception as e:
             # Cleanup on error
