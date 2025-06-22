@@ -1,244 +1,124 @@
-#!/usr/bin/env python3
-
-import os
-import re
+import xlrd
 import json
-import argparse
-import datetime
-from urllib.parse import urlsplit
-import pandas as pd
-import requests
-from bs4 import BeautifulSoup
-import urllib.request
 
+class XLSConverter:
+    def __init__(self, file_path):
+        self.file_path = file_path
 
-class ProcurementTracker:
-    """Tracks and processes procurement files with version detection."""
-    
-    MONTHS_TO_NUMBERS = {
-        'styczeń': 1, 'luty': 2, 'marzec': 3, 'kwiecień': 4,
-        'maj': 5, 'czerwiec': 6, 'lipiec': 7, 'sierpień': 8,
-        'wrzesień': 9, 'październik': 10, 'listopad': 11, 'grudzień': 12
-    }
-    
-    USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36'
-    
-    def __init__(self, output_directory):
-        self.output_directory = output_directory
-        self.state_file = os.path.join(output_directory, '.procurement_tracker.json')
-        self._ensure_output_directory_exists()
-        self.state = self._load_state()
-    
-    def _ensure_output_directory_exists(self):
-        """Create output directory if needed."""
-        os.makedirs(self.output_directory, exist_ok=True)
-
-    def _load_state(self):
-        """Load tracking state from file."""
-        if os.path.exists(self.state_file):
-            with open(self.state_file, 'r') as f:
-                return json.load(f)
-        return {'tracked_files': {}}
-
-    def _save_state(self):
-        """Persist current tracking state."""
-        with open(self.state_file, 'w') as f:
-            json.dump(self.state, f, indent=2)
-
-    def _convert_month_name_to_number(self, month_name):
-        """Convert Polish month name to number."""
-        return self.MONTHS_TO_NUMBERS.get(month_name.lower(), 1)
-
-    def _generate_file_id(self, year, month):
-        """Create standardized file identifier."""
-        return f"{year}-{month:02d}"
-
-    def _extract_version(self, text):
-        """Extract version number from text (e.g., 'ver 3' -> 3)."""
-        version_match = re.search(r'(?:ver|wersja|version)[\s\.]*(\d+)', text, re.IGNORECASE)
-        if version_match:
-            return int(version_match.group(1))
-        return 1  # Default version if not specified
-
-    def _process_excel_file(self, excel_path, output_base_name):
-        """Convert Excel file to JSON and clean up."""
-        try:
-            # Read and fix Excel if needed
-            df = pd.read_excel(excel_path)
-            if len(df.columns) > 5:
-                fixed_path = f"{output_base_name}.xlsx"
-                df = df.iloc[:, :5]
-                df = df[df.apply(lambda row: row.count(), axis=1) == 5]
-                df.to_excel(fixed_path, index=False)
-                os.remove(excel_path)
-                excel_path = fixed_path
-
-            # Process data
-            df.columns = ["lp", "code", "name", "price_pln", "price_eur"]
-            products = df[df['name'].notnull()].copy()
-            products['price_pln'] = pd.to_numeric(products['price_pln'], errors='coerce').fillna(0)
-            products['price_pln'] = products['price_pln'].apply(
-                lambda x: str(round(float(x), 2)) if str(x).replace('.','').isdigit() else '0')
-            products['price_eur'] = products['price_eur'].fillna(0).apply(
-                lambda x: str(round(float(x), 2)) if str(x).replace('.','').isdigit() else '0')
-            products['code'] = products['code'].fillna('')
-
-            # Categorize products
-            categories = []
-            current_category = []
-            for _, row in products.iterrows():
-                if (row['price_pln'] == '0.0' and 
-                    row['price_eur'] == '0.0' and 
-                    len(current_category) > 0):
-                    categories.append({
-                        "category": current_category[0]['name'],
-                        "list": current_category
-                    })
-                    current_category = [row.to_dict()]
-                else:
-                    current_category.append(row.to_dict())
-
-            # Save JSON
-            json_path = f"{output_base_name}.json"
-            with open(json_path, 'w', encoding='utf-8') as f:
-                json.dump(categories, f, ensure_ascii=False)
-
-            # Clean up
-            if os.path.exists(excel_path):
-                os.remove(excel_path)
-
-            return True
-        except Exception as e:
-            print(f"Error processing {excel_path}: {e}")
-            return False
-
-    def _download_if_newer_version(self, file_url, file_id, href, version):
-        """Download and process file if it's a newer version."""
-        current_state = self.state['tracked_files'].get(file_id, {})
-        current_version = current_state.get('version', 0)
+    def convert(self, output_file_path=None):
+        if output_file_path is None:
+            base = os.path.splitext(self.file_path)[0]
+            output_file_path = base + '.json'
         
-        # Skip if version is not newer
-        if version <= current_version:
-            print(f"Skipping older version ({version}) of file: {file_url}")
-            return False
+        workbook = xlrd.open_workbook(self.file_path)
+        sheet = workbook.sheet_by_index(0)
         
-        # Determine output paths
-        is_current = file_id == self._generate_file_id(
-            datetime.date.today().year,
-            datetime.date.today().month
-        )
-        output_name = os.path.join(
-            self.output_directory,
-            'latest' if is_current else file_id
-        )
-        xls_path = f"{output_name}.xls"
-
-        # Download and process
-        print(f"Processing new version ({version}) of file: {file_url}")
-        urllib.request.urlretrieve(file_url, xls_path)
+        items = []
+        current_category = None
+        current_cpv = None
+        in_empty_category = False
         
-        if self._process_excel_file(xls_path, output_name):
-            # Update state
-            self.state['tracked_files'][file_id] = {
-                'href': href,
-                'version': version,
-                'last_processed': datetime.datetime.now().isoformat(),
-                'json_path': f"{output_name}.json"
-            }
-            return True
-        return False
-
-    def process_url(self, url):
-        """Main processing method with version detection."""
-        try:
-            response = requests.get(url, headers={'User-Agent': self.USER_AGENT})
-            soup = BeautifulSoup(response.text, "html.parser")
+        for row_idx in range(1, sheet.nrows):
+            row = sheet.row(row_idx)
             
-            # First pass: collect all potential files with versions
-            file_candidates = {}
-            for link in soup.find_all('a', href=True):
-                link_text = link.get_text().strip()
+            # Extract values with proper type handling
+            lp_val = self._get_cell_value(row, 0)
+            cpv_val = self._get_cell_value(row, 1)
+            name_val = self._get_cell_value(row, 2)
+            pln_val = self._get_cell_value(row, 3)
+            eur_val = self._get_cell_value(row, 4)
+
+            # Skip completely empty rows
+            if not any([lp_val, cpv_val, name_val, pln_val, eur_val]):
+                continue
                 
-                # Check if link matches procurement file pattern
-                if not re.search(
-                    r'Dostawy i usługi .*',
-                    link_text, re.IGNORECASE
-                ):
+            # Detect empty category markers (no name and no CPV)
+            if not name_val and not cpv_val:
+                in_empty_category = True
+                continue
+                
+            # Reset empty category flag when we find valid name/CPV
+            if name_val or cpv_val:
+                in_empty_category = False
+                
+            # Skip rows within empty categories
+            if in_empty_category:
+                continue
+                
+            # Handle category rows (have name but may or may not have CPV)
+            if name_val and self._is_price_empty(pln_val, eur_val):
+                # Only set category if it has either name or CPV
+                current_category = name_val
+                current_cpv = cpv_val if cpv_val else None
+                continue
+                
+            # Handle item rows (must have name and at least one price)
+            if name_val and not self._is_price_empty(pln_val, eur_val):
+                # Skip if no valid CPV available (neither item nor category has CPV)
+                if not cpv_val and not current_cpv:
                     continue
-
-                # Extract year and month
-                year_match = '2025'
-                month_match = re.search(
-                    'grudzień|listopad|październik|wrzesień|sierpień|lipiec|czerwiec|styczeń|luty|marzec|kwiecień|maj',
-                    link_text, re.IGNORECASE
-                )
-                if not year_match or not month_match:
+                    
+                # Use item's CPV if available, otherwise use category's CPV
+                code = cpv_val if cpv_val else current_cpv
+                
+                # Skip if no valid category
+                if not current_category:
                     continue
+                    
+                # Convert and validate LP
+                try:
+                    lp_float = float(lp_val)
+                except (ValueError, TypeError):
+                    continue
+                    
+                # Format prices to 2 decimal places
+                pln_str = self._format_price(pln_val)
+                eur_str = self._format_price(eur_val)
+                
+                items.append({
+                    "category": current_category,
+                    "lp": lp_float,
+                    "code": code,
+                    "name": name_val,
+                    "price_pln": pln_str,
+                    "price_eur": eur_str
+                })
+        
+        with open(output_file_path, 'w', encoding='utf-8') as f:
+            json.dump(items, f, ensure_ascii=False, indent=2)
+            
+        return output_file_path
 
-                file_year = '2025'
-                file_month = self._convert_month_name_to_number(month_match.group())
-                file_id = self._generate_file_id(file_year, file_month)
-                href = link['href']
-                version = self._extract_version(link_text)
+    def _get_cell_value(self, row, index):
+        """Extract cell value with proper type handling"""
+        if index >= len(row):
+            return ""
+            
+        cell = row[index]
+        if cell.ctype in (xlrd.XL_CELL_EMPTY, xlrd.XL_CELL_BLANK):
+            return ""
+            
+        # Convert numbers to floats, leave strings as-is
+        if cell.ctype == xlrd.XL_CELL_NUMBER:
+            return float(cell.value)
+            
+        return str(cell.value).strip()
 
-                # Keep only the newest version for each month
-                if file_id not in file_candidates or version > file_candidates[file_id]['version']:
-                    url_parts = urlsplit(url)
-                    file_url = f"{url_parts.scheme}://{url_parts.netloc}{href}"
-                    file_candidates[file_id] = {
-                        'url': file_url,
-                        'href': href,
-                        'version': version
-                    }
+    def _is_price_empty(self, pln, eur):
+        """Check if both prices are empty/zero"""
+        pln_empty = pln in (0, 0.0, "", None)
+        eur_empty = eur in (0, 0.0, "", None)
+        return pln_empty and eur_empty
 
-            # Second pass: process the selected candidates
-            for file_id, candidate in file_candidates.items():
-                self._download_if_newer_version(
-                    candidate['url'],
-                    file_id,
-                    candidate['href'],
-                    candidate['version']
-                )
+    def _format_price(self, value):
+        """Format price as string rounded to 2 decimals or empty string"""
+        if value in (0, 0.0, "", None):
+            return ""
+            
+        try:
+            # Handle both string and numeric values
+            num_value = float(value)
+            return f"{num_value:.2f}"
+        except (ValueError, TypeError):
+            return ""
 
-            # Clean up state for files no longer present
-            current_file_id = self._generate_file_id(
-                datetime.date.today().year,
-                datetime.date.today().month
-            )
-            active_files = set(file_candidates.keys())
-            for file_id in list(self.state['tracked_files'].keys()):
-                if file_id not in active_files and file_id != current_file_id:
-                    print(f"File no longer available: {file_id}")
-                    # Keep in state but mark as unavailable
-                    self.state['tracked_files'][file_id]['available'] = False
-
-            self._save_state()
-            return True
-
-        except Exception as e:
-            print(f"Error processing {url}: {e}")
-            return False
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="Track and process procurement files with version detection"
-    )
-    parser.add_argument(
-        '-u', '--url',
-        default='https://dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych',
-        help='Source URL to scrape'
-    )
-    parser.add_argument(
-        '-o', '--output',
-        default='./cpv',
-        help='Output directory for processed files'
-    )
-    
-    args = parser.parse_args()
-    tracker = ProcurementTracker(args.output)
-    tracker.process_url(args.url)
-
-
-if __name__ == "__main__":
-    main()
