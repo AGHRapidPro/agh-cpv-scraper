@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-
-import argparse
 import os
 import re
 import json
@@ -20,8 +17,10 @@ class ProcurementTracker:
     def __init__(self, output_directory):
         self.output_directory = output_directory
         self.state_file = os.path.join(output_directory, '.procurement_tracker.json')
+        self.any_upgrade = False
         os.makedirs(output_directory, exist_ok=True)
         self.state = self.load_state()
+        self.verify_existing_files()
     
     def load_state(self):
         if os.path.exists(self.state_file):
@@ -33,6 +32,13 @@ class ProcurementTracker:
         with open(self.state_file, 'w') as f:
             json.dump(self.state, f, indent=2)
 
+    def verify_existing_files(self):
+        for file_id, data in list(self.state['downloaded'].items()):
+            file_path = os.path.join(self.output_directory, f"{file_id}.xls")
+            if not os.path.exists(file_path):
+                print(f"Missing file detected: {file_id}.xls. Redownloading...")
+                self.download_file(data['url'], file_id, data['version'])
+
     def extract_version(self, text):
         match = re.search(r'(?:ver|wersja|version)[\s._]*(\d+)', text, re.IGNORECASE)
         return int(match.group(1)) if match else 1
@@ -40,64 +46,53 @@ class ProcurementTracker:
     def process_links(self, base_url):
         headers = {'User-Agent': USER_AGENT}
         response = requests.get(base_url, headers=headers)
+        response.raise_for_status()
+        
         soup = BeautifulSoup(response.text, 'html.parser')
+        found_links = False
         
         for link in soup.find_all('a', href=True):
-            href = link['href'].lower()
+            href = link.get('href', '').lower()
             if not href.endswith('.xls'):
                 continue
             
             full_url = urljoin(base_url, link['href'])
-            text = link.text.lower() + full_url.lower()
+            text = (link.text + full_url).lower()
             
-            for month_polish, month_num in MONTHS_POLISH.items():
-                if month_polish in text:
-                    version = self.extract_version(text)
-                    year_match = re.search(r'\d{4}', full_url)
+            for polish_month, month_num in MONTHS_POLISH.items():
+                if polish_month in text:
+                    year_match = re.search(r'20\d{2}', full_url)
                     if not year_match:
                         continue
                     
                     year = int(year_match.group(0))
                     file_id = f"{year}-{month_num:02d}"
+                    version = self.extract_version(text)
+                    found_links = True
                     
                     current = self.state['downloaded'].get(file_id, {'version': 0})
-                    if version > current['version']:
+                    if version > current.get('version', 0):
+                        self.any_upgrade = True
                         self.download_file(full_url, file_id, version)
                     break
+        
+        if not found_links:
+            print("No valid links found on the page.")
+        elif not self.any_upgrade:
+            print("All files are up-to-date.")
 
     def download_file(self, url, file_id, version):
         output_path = os.path.join(self.output_directory, f"{file_id}.xls")
-        response = requests.get(url, headers={'User-Agent': USER_AGENT})
+        headers = {'User-Agent': USER_AGENT}
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
         
         with open(output_path, 'wb') as f:
             f.write(response.content)
         
-        self.state['downloaded'][file_id] = {
+        self.state.setdefault('downloaded', {})[file_id] = {
             'url': url,
             'version': version,
             'downloaded_at': datetime.now().isoformat()
         }
-        print(f"Downloaded {url} as {file_id}.xls (v{version})")
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="Track and download procurement files with version detection"
-    )
-    parser.add_argument(
-        '-u', '--url',
-        default='https://dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych',
-        help='Source URL to scrape'
-    )
-    parser.add_argument(
-        '-o', '--output',
-        default='./cpv',
-        help='Output directory for downloaded files'
-    )
-    args = parser.parse_args()
-    
-    tracker = ProcurementTracker(args.output)
-    tracker.process_links(args.url)
-    tracker.save_state()
-
-if __name__ == "__main__":
-    main()
+        print(f"Downloaded: {file_id}.xls (v{version})")
