@@ -226,8 +226,8 @@ def main():
     )
     parser.add_argument(
         '-u', '--url',
-        default='https://www.dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych-agh/',
-        help='Source URL to monitor'
+        default='https://dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych',
+        help='Source URL to scrape'
     )
     parser.add_argument(
         '-o', '--output',
