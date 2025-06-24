@@ -1,109 +1,125 @@
-#!/usr/bin/python3
-
-from bs4 import BeautifulSoup
-import re
-import requests
-import urllib.request
+import os
+import xlrd
 import json
-import pandas as pd
-
-def month_to_number(month):
-    return {
-        'styczeń': 1,
-        'luty': 2,
-        'marzec': 3,
-        'kwiecień': 4,
-        'maj': 5,
-        'czerwiec': 6,
-        'lipiec': 7,
-        'sierpień': 8,
-        'wrzesień': 9,
-        'październik': 10,
-        'listopad': 11,
-        'grudzień': 12
-    }[month]
-
-def safe_round(x):
-    try:
-        return str(round(float(x), 2))
-    except ValueError:
-        return '0'
-
-def parse_order_list(file_name, output):
-    df = pd.DataFrame(pd.read_excel(file_name))
-
-    df.columns.values[0] = "lp"
-    df.columns.values[1] = "code"
-    df.columns.values[2] = "name"
-    df.columns.values[3] = "price_pln"
-    df.columns.values[4] = "price_eur"
-
-    df_filtered = df[df['name'].notnull()]
-
-    df_filtered = df_filtered.copy()
-    df_filtered['price_pln'] = df_filtered['price_pln'].fillna(0).apply(lambda x: safe_round(x))
-
-    df_filtered = df_filtered.copy()
-    df_filtered['price_eur'] = df_filtered['price_eur'].fillna(0).apply(lambda x: safe_round(x))
-
-    df_filtered = df_filtered.copy()
-    df_filtered['code'] = df_filtered['code'].fillna('')
-
-    product_dict = df_filtered.to_dict('records')
-
-    result_dict = []
-
-    temp_arr = []
-    for item in product_dict:
-        if item['price_pln'] == '0.0' and item['price_eur'] == '0.0' and len(temp_arr) > 0:
-            result_dict.append({
-                "category": temp_arr[0]['name'],
-                "list": temp_arr
-            })
-            temp_arr = []
-            temp_arr.append(item)
-        else:
-            temp_arr.append(item)
 
 
-    try:
-        with open(output + '.json', 'w', encoding='utf-8') as file:
-            json.dump(result_dict, file, ensure_ascii=False)
-        print("File written successfully!")
-    except Exception as e:
-        print(f"Error writing to file: {e}")
+class XLSConverter:
+    def __init__(self, file_path):
+        self.file_path = file_path
 
-    return product_dict
+    def convert(self, output_file_path=None):
+        if output_file_path is None:
+            base = os.path.splitext(self.file_path)[0]
+            output_file_path = base + '.json'
 
-def parse_xls_file(url, folder = 'C:/Users/Public/Documents'):
-    headers = {"User-Agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36'}
-    page = requests.get(url, headers)
-    soup = BeautifulSoup(page.text, "html.parser")
+        workbook = xlrd.open_workbook(self.file_path)
+        sheet = workbook.sheet_by_index(0)
 
-    links = soup.find_all('a', href = True)
+        items = []
+        current_category = None
+        current_cpv = None
+        in_empty_category = False
 
-    for link in links:
-        filename = link.get_text().strip()
+        for row_idx in range(1, sheet.nrows):
+            row = sheet.row(row_idx)
 
-        if(re.search(r'Dostawy i usługi .*plan zamówień publicznych \d{4} .*(grudzień( \d{1}\.?0?)?|listopad( \d{1}\.?0?)?|październik( \d{1}\.?0?)?|wrzesień( \d{1}\.?0?)?|sierpień( \d{1}\.?0?)?|lipiec( \d{1}\.?0?)?|czerwiec( \d{1}\.?0?)?|styczeń( \d{1}\.?0?)?|luty( \d{1}\.?0?)?|marzec( \d{1}\.?0?)?|kwiecień( \d{1}\.?0?)?|maj( \d{1}\.?0?)?)', filename, re.IGNORECASE)):
-            year = re.search(r'20\d{2}', filename).group()
-            month = re.search('grudzień|listopad|październik|wrzesień|sierpień|lipiec|czerwiec|styczeń|luty|marzec|kwiecień|maj', filename, re.IGNORECASE).group()
-            month = month_to_number(month)
-            if(month < 10):
-                month = '0' + str(month)
+            # Extract values with proper type handling
+            lp_val = self._get_cell_value(row, 0)
+            cpv_val = self._get_cell_value(row, 1)
+            name_val = self._get_cell_value(row, 2)
+            pln_val = self._get_cell_value(row, 3)
+            eur_val = self._get_cell_value(row, 4)
 
-            href = 'https://www.dzp.agh.edu.pl' + link.get('href')
-            name = str(year) + '.' + str(month)
-            output_name = folder + '/' + name
-            print(output_name)
+            # Skip completely empty rows
+            if not any([lp_val, cpv_val, name_val, pln_val, eur_val]):
+                continue
 
-            print(f'downloading {href} as {name}.xls')
-            urllib.request.urlretrieve(href, output_name + '.xls')
-            print('downloaded')
+            # Detect empty category markers (no name and no CPV)
+            if not name_val and not cpv_val:
+                in_empty_category = True
+                continue
 
-            print(parse_order_list(output_name + '.xls', output_name))
+            # Reset empty category flag when we find valid name/CPV
+            if name_val or cpv_val:
+                in_empty_category = False
 
+            # Skip rows within empty categories
+            if in_empty_category:
+                continue
 
-url = 'https://www.dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych-agh/'
-#output_folder = 'C:/Users/matip/OneDrive/Dokumenty/programs/parser2'
-parse_xls_file(url)
+            # Handle category rows (have name but may or may not have CPV)
+            if name_val and self._is_price_empty(pln_val, eur_val):
+                # Only set category if it has either name or CPV
+                current_category = name_val
+                current_cpv = cpv_val if cpv_val else None
+                continue
+
+            # Handle item rows (must have name and at least one price)
+            if name_val and not self._is_price_empty(pln_val, eur_val):
+                # Skip if no valid CPV available (neither item nor category has CPV)
+                if not cpv_val and not current_cpv:
+                    continue
+
+                # Use item's CPV if available, otherwise use category's CPV
+                code = cpv_val if cpv_val else current_cpv
+
+                # Skip if no valid category
+                if not current_category:
+                    continue
+
+                # Convert and validate LP
+                try:
+                    lp_float = float(lp_val)
+                except (ValueError, TypeError):
+                    continue
+
+                # Format prices to 2 decimal places
+                pln_str = self._format_price(pln_val)
+                eur_str = self._format_price(eur_val)
+
+                items.append({
+                    "name": name_val,
+                    "category": current_category,
+                    "lp": lp_float,
+                    "code": code,
+                    "price_pln": pln_str,
+                    "price_eur": eur_str
+                })
+
+        with open(output_file_path, 'w', encoding='utf-8') as f:
+            json.dump(items, f, ensure_ascii=False, indent=2)
+
+        return output_file_path
+
+    def _get_cell_value(self, row, index):
+        """Extract cell value with proper type handling"""
+        if index >= len(row):
+            return ""
+
+        cell = row[index]
+        if cell.ctype in (xlrd.XL_CELL_EMPTY, xlrd.XL_CELL_BLANK):
+            return ""
+
+        # Convert numbers to floats, leave strings as-is
+        if cell.ctype == xlrd.XL_CELL_NUMBER:
+            return float(cell.value)
+
+        return str(cell.value).strip()
+
+    def _is_price_empty(self, pln, eur):
+        """Check if both prices are empty/zero"""
+        pln_empty = pln in (0, 0.0, "", None)
+        eur_empty = eur in (0, 0.0, "", None)
+        return pln_empty and eur_empty
+
+    def _format_price(self, value):
+        """Format price as string rounded to 2 decimals or empty string"""
+        if value in (0, 0.0, "", None):
+            return ""
+
+        try:
+            # Handle both string and numeric values
+            num_value = float(value)
+            return f"{num_value:.2f}"
+        except (ValueError, TypeError):
+            return ""
