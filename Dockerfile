@@ -3,8 +3,8 @@ ARG BUILD_DATE
 LABEL org.label-schema.build-date=$BUILD_DATE
 LABEL maintainer="rapid-prototyping@agh.edu.pl"
 LABEL org.label-schema.schema-version="1.0"
-LABEL org.label-schema.docker.cmd=""
-WORKDIR app
+LABEL org.label-schema.docker.cmd="docker run --rm -itd -v ./agh-cpv-scraper:/app/cpv --name agh-cpv-scraper aghrapidpro/agh-cpv-scraper:latest"
+WORKDIR /app
 COPY *.py .
 COPY requirements.txt .
 RUN python3 -m pip install -r requirements.txt --break-system-packages

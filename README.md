@@ -1,6 +1,6 @@
 # Procurement Tracker
 
-This Python script automates the tracking and processing of xls files from [AGH DZP website](https://www.dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych-agh/), handling version detection and converting Excel data to structured JSON.
+This Python script automates the tracking and processing of xls files from [AGH DZP website](https://dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych), handling version detection and converting Excel data to structured JSON.
 
 ## Features
 
@@ -10,19 +10,35 @@ This Python script automates the tracking and processing of xls files from [AGH 
 - **State management**: Maintains processing history between runs
 - **Data cleaning**: Handles inconsistent Excel formats and missing values
 
-## Usage
+## Usage - Docker
 
+### Running:
+```bash
+docker run --rm -itd \
+-v ./agh-cpv-scraper:/app/cpv \
+--name agh-cpv-scraper \
+aghrapidpro/agh-cpv-scraper:latest
+```
+### Building:
+```bash
+docker buildx build \
+--build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+-t aghrapidpro/agh-cpv-scraper:1.0 \
+-t aghrapidpro/agh-cpv-scraper:latest \
+--push .
+```
+
+## Usage - local
 ```bash
 python3 -m venv .
 source bin/activate
 pip install -r requirements.txt
 ./procurement_tracker.py
 ```
-
 ### Options
 | Option | Description | Default |
 |--------|-------------|---------|
-| `-u`, `--url` | Source URL to monitor | [AGH University Procurement Plans](https://www.dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych-agh/) |
+| `-u`, `--url` | Source URL to monitor | [AGH University Procurement Plans](https://dzp.agh.edu.pl/dla-jednostek-agh/plany-zamowien-publicznych) |
 | `-o`, `--output` | Output directory for processed files | `./cpv` |
 
 ## Workflow
