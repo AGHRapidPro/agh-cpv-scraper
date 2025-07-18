@@ -1,4 +1,4 @@
-FROM python:3.15-alpine
+FROM python:3.14-alpine
 ARG BUILD_DATE
 LABEL org.label-schema.build-date=$BUILD_DATE
 LABEL maintainer="rapid-prototyping@agh.edu.pl"
@@ -9,4 +9,4 @@ COPY *.py .
 COPY requirements.txt .
 RUN python3 -m pip install -r requirements.txt --break-system-packages
 RUN echo -e "0 5 * * *\t/app/main.py -o cpv"
-CMD ["sh", "-c", "main.py -o cpv && crond -f &"]
+CMD ["sh", "-c", "python3 main.py -o cpv && crond -f &"]
