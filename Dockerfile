@@ -1,4 +1,4 @@
-FROM python:3.14-alpine
+FROM python:3.13-alpine3.22
 ARG BUILD_DATE
 LABEL org.label-schema.build-date=$BUILD_DATE
 LABEL maintainer="rapid-prototyping@agh.edu.pl"
