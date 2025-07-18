@@ -8,5 +8,5 @@ WORKDIR app
 COPY *.py .
 COPY requirements.txt .
 RUN python3 -m pip install -r requirements.txt --break-system-packages
-RUN echo -e "0 5 * * *\t/app/main.py -o cpv"
-CMD ["sh", "-c", "python3 main.py -o cpv && crond -f &"]
+RUN echo -e "0 5 * * *\t/app/main.py -o cpv" | crontab -
+CMD ["sh", "-c", "python3 main.py -o cpv && crond -f"]
